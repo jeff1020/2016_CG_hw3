@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+<style>
+
+#info {
+  position: absolute;
+  top: 2%;
+  width: 100%;
+  padding: 10px;
+  text-align: center;
+  color: #ffff00
+}
+
+body {
+  overflow: hidden;
+}
+
+
+</style>
+</head>
+
+<body> 
+
+<div id="info">CGHW3
+<br>Press R to reset position
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r70/three.min.js"></script>
+<script src="https://dl.dropboxusercontent.com/u/3587259/Code/Threejs/OrbitControls.js"></script>
+<script src="https://code.jquery.com/jquery-2.1.4.min.js"></script>
+<script src="https://jyunming-chen.github.io/tutsplus/js/KeyboardState.js"></script>
+
+<script> 
+
+var scene, renderer, camera;
+var car, tireF, tireBL, tireBR;
+var keyboard = new KeyboardState();
+var theta = 0.3;
+var C, RC;
+var v = 0;
+var cylinder;
+init();
+animate();
+
+function init() {
+  scene = new THREE.Scene();
+  renderer = new THREE.WebGLRenderer({antialias: true});
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setClearColor(0x888888);
+  renderer.shadowMapEnabled = true;
+  renderer.shadowMapType = THREE.PCFSoftShadowMap;
+  document.body.appendChild(renderer.domElement);
+
+  camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 1, 10000);
+  camera.position.z = 500;
+
+	car = new THREE.Object3D();
+  scene.add (car);
+	
+  var tire = new THREE.CylinderGeometry (5, 5, 2, 32);
+  var tireMaterial = new THREE.MeshPhongMaterial ({color: 0xaaaaaa});
+  tireF = new THREE.Mesh (tire, tireMaterial);
+  tireBL = tireF.clone();
+  tireBR = tireF.clone();
+  tireF.position.set (-12, -10, 0);
+  tireF.rotation.x = Math.PI / 2;
+  car.add (tireF);
+  tireBL.position.set (12, -10, 8);
+  tireBL.rotation.x = Math.PI / 2;
+  car.add (tireBL);
+  tireBR.position.set (12, -10, -8);
+  tireBR.rotation.x = Math.PI / 2;
+  car.add (tireBR);
+  
+  tireF.castShadow = true;
+  tireBL.castShadow = true;
+  tireBR.castShadow = true;
+  
+
+  var carbody = new THREE.BoxGeometry (40, 16, 20);
+  var bodyMaterial = new THREE.MeshBasicMaterial ({color: 0xff1234,
+  	transparent: true,
+    opacity: 0.4
+    });
+  var body = new THREE.Mesh (carbody, bodyMaterial);
+  car.add (body);
+
+	
+  
+  THREE.ImageUtils.crossOrigin = '';
+  var tex = THREE.ImageUtils.loadTexture('http://i.imgur.com/wLce5Js.jpg');
+  var bmp = THREE.ImageUtils.loadTexture('http://i.imgur.com/fGvV9Xy.jpg');
+  var ground = new THREE.Mesh (new THREE.PlaneGeometry (1000, 1000),
+  	new THREE.MeshPhongMaterial ({
+    	map: tex, bumpMap: bmp, side: THREE.DoubleSide
+    }));
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(5, 5);
+  bmp.wrapS = bmp.wrapT = THREE.RepeatWrapping;
+  bmp.repeat.set(5, 5);
+  scene.add (ground);
+  ground.rotation.x = Math.PI / 2;
+  ground.receiveShadow = true;
+  
+  //Cylinder
+var geometry = new THREE.CylinderGeometry( 30, 30, 200, 32 );
+var material = new THREE.MeshLambertMaterial( {color: 0x888888} );
+cylinder = new THREE.Mesh( geometry, material );
+cylinder.position.set(300,0,40);
+scene.add(cylinder);
+cylinder.castShadow = true;
+  
+ 
+  var light = new THREE.DirectionalLight (0xffffff, 1.5);
+  light.position.set (-1, 1, 1);
+  scene.add (light);
+  light.castShadow = true;
+  light.shadowMapWidth = 2048;
+  light.shadowMapHeight = 2048;
+  light.shadowCameraNear = -700;
+  light.shadowCameraFar = 700;
+  light.shadowCameraLeft = -700;
+  light.shadowCameraRight = 700;
+  light.shadowCameraVisible = false;
+
+  window.addEventListener('resize', onWindowResize, false);
+ 
+  RCmesh = new THREE.Mesh (new THREE.SphereGeometry(2,16,16), new THREE.MeshBasicMaterial({color: 0xffff00}));
+  scene.add (RCmesh);
+	C = new THREE.Vector3();  
+}
+
+function onWindowResize() {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+}
+
+function checkIntersect(rect, circle) {
+  var rad2 = circle.r * circle.r;
+  var max = rect.max.clone().sub(circle.c);
+  var min = rect.min.clone().sub(circle.c);
+  
+  if (max.x < 0) {
+  	if (max.z < 0)
+    	return (max.x*max.x + max.z*max.z < rad2);
+    else if (min.z > 0)
+    	return (max.x*max.x + min.z*min.z < rad2);
+    else
+    	return (Math.abs(max.x) < circle.r);
+  } else if (min.x > 0) {
+  	if (max.z < 0)
+    	return (min.x*min.x + max.z*max.z < rad2);
+    else if (min.z > 0)
+    	return (min.x*min.x + min.z*min.z < rad2);
+    else
+    	return (min.x < circle.r);
+  } else {
+  	if (max.z < 0)
+    	return (Math.abs(max.z) < circle.r);
+    else if (min.z > 0)
+    	return (min.z < circle.z);
+    else
+    	return true;
+  }
+}
+
+
+function animate() {
+	keyboard.update();
+  if (keyboard.pressed ("left"))
+  	theta += 0.02;
+  else if (keyboard.pressed("right"))
+  	theta -= 0.02;
+  else if (keyboard.pressed("up"))
+  	v += 0.8;
+  else if (keyboard.pressed("down"))
+  	v -= 0.8;
+  else if (keyboard.down("R")){
+  	car.position.set (0, 0, 0);
+    RCmesh.position.set (0, 0, 0);
+    C.set (0, 0, 0);
+    v = 0;
+  }
+    if(v > 18)
+    	v = 18;
+    if(v<-18)
+    	v = -18;
+  /////////  
+ 
+		var rect = {};
+    rect.max = car.position.clone().add (new THREE.Vector3(20, 0, 10));
+    rect.min = car.position.clone().sub (new THREE.Vector3(20, 0, 10));
+
+    var circ ={};
+    circ.c = cylinder.position.clone();
+    circ.r = 30;
+  	var hit = checkIntersect (rect, circ);
+    console.log (hit);
+		if (hit) {
+    	cylinder.material.color.set (0xFF0000);
+      v = 0.000;
+    } else {
+    	cylinder.material.color.set (0x888888);
+    }
+  
+  
+  //////
+  
+  RC = car.localToWorld (new THREE.Vector3(-12,0,24/Math.tan(theta)));
+  RCmesh.position.copy (RC);
+  RCmesh.position.y = 0;
+  
+  var omega = v * Math.tan(theta)/24;
+  var deltaT = 0.05;
+  var vv = C.clone().sub(RC).applyAxisAngle (new THREE.Vector3(0,1,0), omega*deltaT);
+  C = vv.add(RC);
+  car.position.copy(C);
+  car.position.y = 15;
+  car.rotation.y += omega*deltaT;
+
+  
+  var cameraOffset = car.localToWorld (new THREE.Vector3(150,100,0));
+  camera.position.copy(cameraOffset);
+  camera.lookAt(car.position);
+  
+  tireF.rotation.z = -theta;
+
+	requestAnimationFrame(animate);
+  renderer.render(scene, camera);
+}
+
+
+</script>
+
+</body>
+
+</html>
